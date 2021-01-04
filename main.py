@@ -32,7 +32,6 @@ if len(sys.argv) == 1:
 with open("config.json") as config_file:
     config = json.load(config_file)
     api_key = config["api_key"]
-    cookie = config.get("cookie", "")
     ubicast_server = config["ubicast_server"]
 
 urls = sys.argv[1:]
@@ -42,22 +41,28 @@ def oid_from_permalink(url):
     return oid
 
 def oid_from_videolink(url):
-    cookies = {'mssessionid': cookie}
+    slug = re.sub('.*videos', "", url).strip("/")
     
-    webpage = requests.get(url, cookies=cookies, verify=False)
-    soup = BeautifulSoup(webpage.content, "html.parser")
-    meta_tag = soup.find("meta", property="og:url")
-    permalink = meta_tag["content"]
-    return oid_from_permalink(permalink)
+    params = {
+        "api_key": api_key,
+        "slug": slug
+    }
+    
+    res = requests.get(f"{ubicast_server}/api/v2/medias/get/",
+                       params=params, verify=False)
+    results_dict = json.loads(res.content)
+    info = results_dict["info"]
+    oid = info["oid"]
+    return oid
 
 def get_oid(url):
     if "permalink" in url:
         return oid_from_permalink(url)
-    else:
-        if (len(cookie) == 0):
-            print("The requested URL is not a permalink. To download this video, you need to provide a cookie in config.json.")
-            exit(1)
+    elif "video" in url:
         return oid_from_videolink(url)
+    else:
+        print("The requested URL is unrecognized. Please provide a permalink.")
+        exit(1)
 
 def download(url):
     oid = get_oid(url)
